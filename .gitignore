@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# environment variables
+.env
+
+# macOS
+.DS_Store
+
+# logs
+*.log
+
+# optional
+coverage/
+dist/
+
+
+querynotes.txt
+saveComputer.txt
+saveComputers.js
+notes.txt
