@@ -1,0 +1,513 @@
+const db = require("../config/db");
+
+async function getAllComputers() {
+
+    const [rows] = await db.query(`
+        SELECT * FROM Computers
+    `);
+
+    // [rows] means take index 0 from the array = array of all rows in the result table
+    // query returns array of 2 inner arrays where first inner array = array of objects of resulting rows.
+    // Equivalent to:
+    // const result = await db.query(...);
+    // const rows = result[0];
+
+    return rows; // returns Array of JavaScript objects then res.json(rows) convery to JSON array and send to client.
+}
+
+async function findByComputerName(computerName) {
+
+    const result = await db.query(`
+        SELECT * FROM Computers WHERE 
+        computer_name = ?
+        `, [computerName]);
+        // use ? and , [computerName] to pass parameter safely, mssql uses @computerName
+
+    return result[0][0];
+    // returns a single object
+}
+
+async function findProgramsByComputerName(computerName) {
+
+    const result = await db.query(`
+        SELECT p.program_name 
+        FROM Computers c
+        JOIN Programs p 
+            ON c.id = p.computer_id
+        WHERE c.computer_name = ?
+        `, [computerName]);
+
+    return result[0];
+    // returns as rows
+
+    /*
+        example result:
+
+        [
+        {
+            "program_name": "Google Chrome"
+        },
+        {
+            "program_name": "Discord"
+        },
+        {
+            "program_name": "Docker Desktop"
+        }
+        ]
+    */
+}
+
+async function searchComputers(keyword) {
+
+    const result = await db.query(`
+        SELECT computer_name
+        FROM Computers
+        WHERE computer_name LIKE ?
+        ORDER BY computer_name ASC
+        LIMIT 20
+        `, [`%${keyword}%`]);  
+
+        // computer_name has many rows and computer_name is at 1 row per data.
+        // so returns multiple objects, 1 row = 1 object
+
+    return result[0];
+    // only return computer_name
+    // % wildcard represents any number of characters, even zero characters.
+    // Find names that contain eg. "Intern" anywhere.
+    // So it matches:
+    // Intern-user
+    // PC-Intern-01
+    // MyInternComputer
+    // LIMIT 20
+    // So autocomplete naturally narrows results.
+    // Example:
+
+    // User types:
+
+    // Intern
+
+    // Maybe 50 results.
+
+    // Then user types:
+
+    // Intern-PC-0
+
+    // Now maybe only 5 results.
+
+    // use debouncing so frontend sends request right after typing.
+
+    /* Example return:
+        [
+            { "computer_name": "Intern-PC-01" },
+            { "computer_name": "Intern-PC-02" },
+            { "computer_name": "Intern-Laptop" }
+        ]
+
+    */
+
+}
+
+async function saveComputer(data) {
+    const {
+        computer_name,
+        os_version,
+        serial_number,
+        cpu,
+        ram,
+        storage,
+        programs // Installed programs array(name must match with what frontend sends)
+    } = data;
+    // object destructuring
+    // allows you to "unpack" properties from objects 
+    // and assign them to distinct variables in a single, concise step. 
+    /*
+    const user = { name: 'Alice', age: 25 };
+    const { name, age } = user;
+    // name = 'Alice', age = 25
+
+    sample Frontend/Python sended JSON body:
+
+    Example request body:
+
+    {
+    "computer_name": "Intern-user",
+    "os_version": "Windows 11 Pro",
+    "serial_number": "ABC123456",
+    "cpu": "AMD Ryzen 7 7735HS",
+    "ram": "32 GB",
+    "storage": "Samsung SSD 990 PRO 1TB",
+
+    "programs": [
+        "Google Chrome",
+        "Discord",
+        "Docker Desktop",
+        "Visual Studio Code"
+    ]
+    }
+
+    Because you added:
+
+    app.use(express.json());
+
+    Express automatically parses JSON.
+
+    So:
+
+    req.body
+
+    becomes:
+
+    {
+    computer_name: "Intern-user",
+    os_version: "Windows 11 Pro",
+    serial_number: "ABC123456",
+    cpu: "AMD Ryzen 7 7735HS",
+    ram: "32 GB",
+    storage: "Samsung SSD 990 PRO 1TB",
+
+    programs: [
+        "Google Chrome",
+        "Discord"
+    ]
+    }
+
+    inside Node.js.
+    */
+
+
+    // returns information about the INSERT operation
+    const [result] = await db.query(`
+        INSERT INTO Computers (
+            computer_name,
+            os_version,
+            serial_number,
+            cpu,
+            ram,
+            storage
+        )
+        VALUES (?, ?, ?, ?, ?, ?)    
+        `, [
+            computer_name,
+            os_version,
+            serial_number,
+            cpu,
+            ram,
+            storage
+        ]);
+
+        const computerId = result.insertId;
+        // store the newly created computer ID into variable computerId, 
+        // now you need this ID because Programs table uses: computer_id FK.
+        // We need this because Programs table must know which computer each program belongs to.
+
+        /*
+        Now MySQL is NOT returning rows from a table like SELECT.
+
+        Instead it returns:
+
+        information about the INSERT operation
+
+        Example:
+
+        result = {
+            fieldCount: 0,
+            affectedRows: 1,
+            insertId: 7,   // the auto-generated ID of the newly inserted row
+            warningStatus: 0
+        }
+
+        Because INSERT does not produce table rows.
+
+        It produces:
+
+        operation result metadata
+        */
+
+        for (const program of programs) {
+            await db.query(`
+                INSERT INTO Programs (
+                    computer_id,
+                    program_name)
+                    VALUES (?,?)
+            `, [computerId, program]);
+        }
+        // iterating over the values of an iterable (like an array or string)
+
+        /*
+        This inserts each program into Programs.
+
+        Example first loop:
+
+        [computerId, program]
+
+        becomes:
+
+        [7, "Chrome"]
+
+        So database inserts:
+
+        computer_id	       program_name
+        7	               Chrome
+
+        After all loops:
+
+        computer_id	       program_name
+        7	               Chrome
+        7	               Discord
+        7                  Docker
+
+        So this part creates the 1 computer → many programs relationship.
+
+        */
+
+
+
+
+
+
+
+
+
+    /*
+    Because your table has:
+
+    id INT AUTO_INCREMENT PRIMARY KEY
+
+    MySQL/MariaDB automatically:
+
+    1. creates the ID
+    2. increments it automatically
+
+    So you should NOT insert id manually.
+
+    The values are matched to ? in order from left to right.
+
+    1st ? → computer_name
+    2nd ? → os_version
+    3rd ? → serial_number
+    4th ? → cpu
+    5th ? → ram
+    6th ? → storage
+    */
+}
+
+
+
+
+
+
+
+/*
+    const {
+        computer_name,
+        os_version,
+        serial_number,
+        cpu,
+        ram,
+        storage,
+        programs
+    } = data;
+
+    This is called:
+
+object destructuring
+
+It extracts values from an object into variables.
+
+Suppose data is:
+
+const data = {
+    computer_name: "Intern-user",
+    os_version: "Windows 11",
+    serial_number: "ABC123",
+    cpu: "Ryzen 7",
+    ram: "32 GB",
+    storage: "1TB SSD",
+    programs: [
+        "Chrome",
+        "Discord"
+    ]
+};
+ 
+Then this:
+
+const {
+    computer_name,
+    os_version,
+    serial_number,
+    cpu,
+    ram,
+    storage,
+    programs
+} = data;
+
+is equivalent to:
+
+const computer_name = data.computer_name;
+
+const os_version = data.os_version;
+
+const serial_number = data.serial_number;
+
+const cpu = data.cpu;
+
+const ram = data.ram;
+
+const storage = data.storage;
+
+const programs = data.programs;
+
+So after destructuring:
+
+computer_name
+
+contains:
+
+"Intern-user"
+
+and:
+
+programs
+
+contains:
+
+["Chrome", "Discord"]
+
+
+
+
+*/
+
+
+
+module.exports = {
+    getAllComputers,
+    findByComputerName,
+    findProgramsByComputerName,
+    searchComputers,
+    saveComputer
+};
+
+/*
+db.query() returns:
+[
+   rows,
+   fields
+]
+
+So imagine:
+
+[
+   ["ALL DATABASE ROWS HERE"],
+
+   ["EXTRA MYSQL INFO"]
+]
+
+The first item is NOT one row.
+
+The first item is:
+
+the ENTIRE rows array
+
+Example:
+
+const result = [
+   [ // rows array
+      { id: 1, name: "A" },
+      { id: 2, name: "B" }
+   ],
+
+   [ // fields array
+      "metadata"
+   ]
+];
+
+Now:
+
+result[0]
+
+gives:
+
+[
+   { id: 1, name: "A" },
+   { id: 2, name: "B" }
+]
+
+because index 0 is the WHOLE rows array.
+
+Then:
+
+result[0][0]
+
+
+gives:
+
+{ id: 1, name: "A" }
+
+the first actual database row.
+
+So:
+
+const [rows] = await db.query(...);
+
+means:
+
+const rows = result[0];
+
+And now:
+
+rows
+
+contains ALL database rows.
+
+
+
+The database creates:
+
+one object per matched row
+
+So:
+
+WHERE computer_name = 'Intern-user'
+
+matches:
+
+1 row
+
+therefore:
+
+[
+   { ... }
+]
+
+1 object inside the array.
+
+But:
+
+WHERE computer_name LIKE '%Intern%'
+
+might match:
+
+5 rows
+
+therefore:
+
+[
+   { ... },
+   { ... },
+   { ... },
+   { ... },
+   { ... }
+]
+
+5 objects inside the array.
+
+So:
+
+1 matched database row
+=
+1 JS object
+
+Very important backend understanding.
+
+*/

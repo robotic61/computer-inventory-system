@@ -1,0 +1,55 @@
+async function saveComputer(req, res) {
+    try {
+
+        const [rows] = await db.query(`
+            SELECT id FROM Computers
+            WHERE computer_name = ?
+            `, [req.body.computerName]);
+
+        const row = rows[0]; /* gets the first array from the result
+        , which is the array of rows object */
+
+        const computer_id = row.id;
+
+        let comSql;
+        let comSqlUpdate = 'UPDATE Computers SET ';
+        let tableName;
+        let sqls = [];
+        // map = each input for arrow function is each array element and after => is what we do with each element
+        // Yes, that is exactly right! In standard nested loops, the inner loop runs completely from start to finish for each single iteration of the outer loop.
+        req.body.tables.map(table => { // for each table(outer loop)
+            tableName = table.tableName; // gets each table name
+            let sql = `INSERT INTO ${tableName} (`
+
+            let names = '';
+            let values = 'VALUES (';
+            names += 'computer-id-field,';
+            values += 'computer-id-value,';
+            table.rows.map(row => { // for each row (inner loop)
+                // (x , y) = input of .map: x = current item, y = current index
+                row.fields.map((field, index) => { // for each item in fields array do this
+                    //{ "name": "computer_name", "value": "IT001" },
+                    if (index === fields.length) {
+                        comSqlUpdate
+                    }
+                    comSqlUpdate += `${field.name} = ${field.value},`;
+
+                    names += `${field.name},`;
+                    values += `${field.value},`
+
+                    // finish constructing insert and update query
+                    // then do delete query but how?
+                    sql += names
+                    sql += values;
+
+                    if (tableName === 'Computers') {
+                        comSql = sql;
+                    }
+                    else {
+                        sqls.push(sql);
+                    }
+                }); 
+                
+            });
+
+        }
