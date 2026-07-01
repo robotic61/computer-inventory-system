@@ -29,7 +29,6 @@ app.use(express.urlencoded({extended: true}));
 app.use(computerRoutes);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use("/", computerRoutes);
 
 const PORT = 3070;
 app.listen(PORT, function() { //need to use port 3070? (custom port)

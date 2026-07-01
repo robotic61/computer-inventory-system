@@ -8,12 +8,12 @@ const computerController = require("../controllers/computer.controller");
  * /computers:
  *   get:
  *     summary: Get all computers
- *     description: Returns a list of all computers in the database.
+ *     description: Returns a list of all computers in the database. Internal database id is not included in the response.
  *     tags:
  *       - Computers
  *     responses:
  *       200:
- *         description: Successfully retrieved computer list.
+ *         description: Successfully retrieved computer list. Returns an empty array if no computers exist.
  *       500:
  *         description: Internal server error.
  */
@@ -24,7 +24,7 @@ router.get("/computers", computerController.getAllComputers);
  * /computers:
  *   post:
  *     summary: Save full computer inventory data
- *     description: Inserts a new computer and all related inventory data, including programs, network adapters, RAM, batteries, storage, external displays, GPUs, CPUs, and printers.
+ *     description: Inserts a new computer if it does not exist. If the computer already exists, deletes the old computer row and related child rows using ON DELETE CASCADE, then inserts the latest full inventory data from the request.
  *     tags:
  *       - Computers
  *     requestBody:
@@ -34,201 +34,220 @@ router.get("/computers", computerController.getAllComputers);
  *           schema:
  *             type: object
  *             required:
- *               - computer_name
- *               - os_version
- *               - serial_number
+ *               - computerName
+ *               - tables
  *             properties:
- *               computer_name:
+ *               computerName:
  *                 type: string
- *                 example: Intern-user
- *               os_version:
- *                 type: string
- *                 example: Windows 11 Pro
- *               serial_number:
- *                 type: string
- *                 example: ABC123456
- *               total_ram_slots:
- *                 type: integer
- *                 example: 2
- *               programs:
+ *                 example: DEV006
+ *               tables:
  *                 type: array
- *                 items:
- *                   type: string
- *                 example:
- *                   - Google Chrome
- *                   - Discord
- *                   - Visual Studio Code
- *               network_adapters:
- *                 type: array
+ *                 description: Dynamic list of tables and rows to insert. Must include the Computers table.
  *                 items:
  *                   type: object
+ *                   required:
+ *                     - tableName
+ *                     - rows
  *                   properties:
- *                     name:
+ *                     tableName:
  *                       type: string
- *                       example: Realtek WiFi 6
- *                     mac_address:
- *                       type: string
- *                       example: A8:41:F4:30:CA:E8
- *                     status:
- *                       type: string
- *                       example: Enabled
- *                     ip_address:
- *                       type: string
- *                       example: 10.132.80.191
- *               rams:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     brand:
- *                       type: string
- *                       example: Kingston
- *                     part_number:
- *                       type: string
- *                       example: KF432S20IB/16
- *                     capacity:
- *                       type: string
- *                       example: 16 GB
- *                     speed:
- *                       type: string
- *                       example: 3200 MHz
- *                     type:
- *                       type: string
- *                       example: DDR4
- *                     form_factor:
- *                       type: string
- *                       example: SODIMM
- *               batteries:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     battery_name:
- *                       type: string
- *                       example: Primary Battery
- *                     manufacturer:
- *                       type: string
- *                       example: Dell
- *                     chemistry:
- *                       type: string
- *                       example: Li-ion
- *                     design_capacity:
- *                       type: string
- *                       example: 50000 mWh
- *                     full_charge_capacity:
- *                       type: string
- *                       example: 45000 mWh
- *                     health_percent:
- *                       type: number
- *                       example: 90
- *                     status:
- *                       type: string
- *                       example: OK
- *               storages:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     storage_name:
- *                       type: string
- *                       example: Samsung SSD 980
- *                     serial_number:
- *                       type: string
- *                       example: S64ANX0T123456
- *                     storage_type:
- *                       type: string
- *                       example: SSD
- *                     capacity:
- *                       type: string
- *                       example: 1 TB
- *                     health_status:
- *                       type: string
- *                       example: Healthy
- *                     connection_type:
- *                       type: string
- *                       example: NVMe
- *                     temperature:
- *                       type: string
- *                       example: 42 C
- *               external_displays:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     display_name:
- *                       type: string
- *                       example: Dell P2422H
- *               gpus:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     gpu_name:
- *                       type: string
- *                       example: Intel(R) Iris(R) Xe Graphics
- *                     manufacturer:
- *                       type: string
- *                       example: Intel Corporation
- *                     gpu_type:
- *                       type: string
- *                       example: Integrated
- *                     vram:
- *                       type: string
- *                       example: 2 GB
- *                     ram_share:
- *                       type: string
- *                       example: Shared
- *                     driver_version:
- *                       type: string
- *                       example: 32.0.101.7077
- *               cpus:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     cpu_name:
- *                       type: string
- *                       example: Intel Core i7-1260P
- *                     manufacturer:
- *                       type: string
- *                       example: Intel
- *                     cores:
- *                       type: integer
- *                       example: 12
- *                     threads:
- *                       type: integer
- *                       example: 16
- *                     base_speed:
- *                       type: string
- *                       example: 2.10 GHz
- *                     max_speed:
- *                       type: string
- *                       example: 4.70 GHz
- *                     socket_type:
- *                       type: string
- *                       example: U3E1
- *               printers:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     printer_name:
- *                       type: string
- *                       example: Canon LBP2900
- *                     ip_address:
- *                       type: string
- *                       example: 192.168.1.50
- *                     department:
- *                       type: string
- *                       example: IT
- *                     is_default:
- *                       type: boolean
- *                       example: true
+ *                       example: Computers
+ *                     rows:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         required:
+ *                           - fields
+ *                         properties:
+ *                           fields:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               required:
+ *                                 - name
+ *                               properties:
+ *                                 name:
+ *                                   type: string
+ *                                   example: computer_name
+ *                                 value:
+ *                                   example: DEV006
+ *           example:
+ *             computerName: DEV006
+ *             tables:
+ *               - tableName: Computers
+ *                 rows:
+ *                   - fields:
+ *                       - name: computer_name
+ *                         value: DEV006
+ *                       - name: dept
+ *                         value: Software Development
+ *                       - name: com_type
+ *                         value: PC
+ *                       - name: brand
+ *                         value: Custom Build
+ *                       - name: product_name
+ *                         value: Developer Workstation
+ *                       - name: model
+ *                         value: Developer Workstation V2
+ *                       - name: main_board
+ *                         value: ASUS ROG STRIX Z790-E
+ *                       - name: spec_remark
+ *                         value: Backend development machine
+ *                       - name: os
+ *                         value: Windows 11 Pro
+ *                       - name: os_type
+ *                         value: Retail
+ *                       - name: os_remark
+ *                         value: Activated
+ *                       - name: office_software
+ *                         value: Microsoft 365 Apps
+ *                       - name: office_email
+ *                         value: dev006@company.com
+ *                       - name: sw_type
+ *                         value: Subscription
+ *                       - name: sw_remark
+ *                         value: Dev tools installed
+ *                       - name: location
+ *                         value: Development Room
+ *                       - name: asset
+ *                         value: 10600006
+ *                       - name: serial_no
+ *                         value: DEVPC0006
+ *                       - name: purchase_date
+ *                         value: 2025-04-15
+ *                       - name: warranty_date
+ *                         value: 2028-04-15
+ *                       - name: status
+ *                         value: In Use
+ *                       - name: status_remark
+ *                         value: Assigned to backend developer
+ *                       - name: remark
+ *                         value: Docker and VS Code installed
+ *                       - name: remark2
+ *                         value: High performance workstation
+ *                       - name: updated_time
+ *                         value: 2026-06-19 13:30:00
+ *                       - name: total_ram_slots
+ *                         value: 4
+ *               - tableName: Programs
+ *                 rows:
+ *                   - fields:
+ *                       - name: program_name
+ *                         value: Docker Desktop
+ *                   - fields:
+ *                       - name: program_name
+ *                         value: Visual Studio Code
+ *               - tableName: Rams
+ *                 rows:
+ *                   - fields:
+ *                       - name: brand
+ *                         value: Corsair
+ *                       - name: part_number
+ *                         value: CMK32GX5M2B5600C36
+ *                       - name: ram
+ *                         value: 32
+ *                       - name: ram_unit
+ *                         value: GB
+ *                       - name: speed
+ *                         value: 5600
+ *                       - name: type
+ *                         value: DDR5
+ *                       - name: form_factor
+ *                         value: DIMM
+ *               - tableName: Storages
+ *                 rows:
+ *                   - fields:
+ *                       - name: storage_name
+ *                         value: Samsung 990 PRO
+ *                       - name: serial_no
+ *                         value: DEV006SSD01
+ *                       - name: storage_type
+ *                         value: NVMe SSD
+ *                       - name: hdd
+ *                         value: 2000
+ *                       - name: hdd_unit
+ *                         value: GB
+ *                       - name: health_status
+ *                         value: 90
+ *                       - name: interface_type
+ *                         value: PCIe Gen4
+ *               - tableName: Gpus
+ *                 rows:
+ *                   - fields:
+ *                       - name: vga
+ *                         value: NVIDIA RTX 4070 SUPER
+ *                       - name: brand
+ *                         value: NVIDIA
+ *                       - name: gpu_type
+ *                         value: Dedicated
+ *                       - name: vram
+ *                         value: 12
+ *                       - name: shared_memory
+ *                         value: 10
+ *                       - name: total_memory
+ *                         value: 12
+ *                       - name: driver
+ *                         value: 556.12
+ *               - tableName: Cpus
+ *                 rows:
+ *                   - fields:
+ *                       - name: cpu
+ *                         value: Intel Core i7-14700K
+ *                       - name: cores
+ *                         value: 20
+ *                       - name: threads
+ *                         value: 28
+ *                       - name: base_speed
+ *                         value: 3.40
+ *               - tableName: Batteries
+ *                 rows:
+ *                   - fields:
+ *                       - name: battery_name
+ *                         value: Primary Battery
+ *                       - name: design_capacity
+ *                         value: 56000
+ *                       - name: full_charge_capacity
+ *                         value: 52000
+ *                       - name: health_percent
+ *                         value: 92
+ *                       - name: status
+ *                         value: Healthy
+ *               - tableName: network_adapters
+ *                 rows:
+ *                   - fields:
+ *                       - name: name
+ *                         value: Intel Ethernet I226-V
+ *                       - name: mac_address
+ *                         value: 00:AA:BB:CC:DD:66
+ *                       - name: ipv4
+ *                         value: 192.168.1.106
+ *                       - name: status
+ *                         value: Enabled
+ *               - tableName: external_displays
+ *                 rows:
+ *                   - fields:
+ *                       - name: display_name
+ *                         value: Dell P2723QE
+ *                       - name: display_type
+ *                         value: External
+ *                       - name: connection_type
+ *                         value: DisplayPort
+ *               - tableName: Printers
+ *                 rows:
+ *                   - fields:
+ *                       - name: printer_name
+ *                         value: HP LaserJet Pro M404dn
+ *                       - name: ip_port
+ *                         value: 192.168.1.90
+ *                       - name: departments
+ *                         value: Software Development
+ *                       - name: is_default
+ *                         value: false
  *     responses:
  *       201:
  *         description: Computer saved successfully.
- *       409:
- *         description: Duplicate computer name.
+ *       400:
+ *         description: Invalid request body, missing computerName, missing tables array, missing Computers table, invalid rows, invalid fields, or missing field name.
  *       500:
  *         description: Internal server error.
  */
@@ -271,7 +290,7 @@ router.post("/computers", computerController.saveComputer);
  * /computers/insertOneProgram:
  *   post:
  *     summary: Insert one program for a computer
- *     description: Inserts one program into the Programs table by using the computer name to find the computer ID.
+ *     description: Inserts a program into the Programs table by using the computer name to find the related computer ID.
  *     tags:
  *       - Computers
  *     requestBody:
@@ -280,16 +299,26 @@ router.post("/computers", computerController.saveComputer);
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - computer_name
+ *               - program
  *             properties:
  *               computer_name:
  *                 type: string
- *                 example: Intern-user
+ *                 example: DEV006
  *               program:
  *                 type: string
- *                 example: Google Chrome
+ *                 example: Docker Desktop
+ *           example:
+ *             computer_name: DEV006
+ *             program: Docker Desktop
  *     responses:
  *       201:
  *         description: Program inserted successfully.
+ *       400:
+ *         description: Missing or invalid computer_name or program.
+ *       404:
+ *         description: Computer not found.
  *       500:
  *         description: Internal server error.
  */
@@ -310,16 +339,26 @@ router.post("/computers/insertOneProgram", computerController.insertOneProgram);
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - computer_name
+ *               - program
  *             properties:
  *               computer_name:
  *                 type: string
- *                 example: Intern-user
+ *                 example: DEV006
  *               program:
  *                 type: string
- *                 example: Google Chrome
+ *                 example: Docker Desktop
+ *           example:
+ *             computer_name: DEV006
+ *             program: Docker Desktop
  *     responses:
  *       200:
  *         description: Program deleted successfully.
+ *       400:
+ *         description: Missing or invalid computer_name or program.
+ *       404:
+ *         description: No matching program found for this computer.
  *       500:
  *         description: Internal server error.
  */
@@ -331,7 +370,7 @@ router.delete("/computers/deleteProgramByComputerName", computerController.delet
  * /computers/delete/{computerName}:
  *   delete:
  *     summary: Delete a computer and all related inventory data
- *     description: Deletes a computer and all related child data, including programs, network adapters, RAM, CPUs, batteries, storage drives, GPUs, printers, and external displays.
+ *     description: Deletes a computer and all related child table data using ON DELETE CASCADE, including programs, network adapters, RAM, CPUs, batteries, storage drives, GPUs, printers, and external displays.
  *     tags:
  *       - Computers
  *     parameters:
@@ -340,11 +379,15 @@ router.delete("/computers/deleteProgramByComputerName", computerController.delet
  *         required: true
  *         schema:
  *           type: string
- *         example: Intern-user
+ *         example: DEV006
  *         description: The computer name to delete.
  *     responses:
  *       200:
- *         description: Computer and all related inventory data deleted successfully.
+ *         description: Computer deleted successfully.
+ *       400:
+ *         description: Missing or invalid computerName.
+ *       404:
+ *         description: Computer not found.
  *       500:
  *         description: Internal server error.
  */
@@ -355,7 +398,7 @@ router.delete("/computers/delete/:computerName", computerController.deleteComput
  * /computers/{computerName}/details:
  *   get:
  *     summary: Get full inventory details by computer name
- *     description: Returns all related inventory data for the specified computer, including programs, network adapters, RAM, batteries, storage drives, external displays, GPUs, CPUs, and printers.
+ *     description: Returns the computer information and all related child table inventory data for the specified computer, including programs, network adapters, RAM, batteries, storage drives, external displays, GPUs, CPUs, and printers. Internal database id fields are excluded from the response.
  *     tags:
  *       - Computers
  *     parameters:
@@ -364,11 +407,15 @@ router.delete("/computers/delete/:computerName", computerController.deleteComput
  *         required: true
  *         schema:
  *           type: string
- *         example: Intern-user
+ *         example: DEV006
  *         description: The computer name.
  *     responses:
  *       200:
  *         description: Successfully retrieved full computer inventory details.
+ *       400:
+ *         description: Missing or invalid computerName.
+ *       404:
+ *         description: Computer not found.
  *       500:
  *         description: Internal server error.
  */
@@ -380,7 +427,7 @@ router.get("/computers/:computerName/details", computerController.findComputerDe
  * /computers/{computerName}:
  *   get:
  *     summary: Get computer details by computer name
- *     description: Returns a single computer's information.
+ *     description: Returns a single computer's information from the Computers table. Internal database id is excluded from the response.
  *     tags:
  *       - Computers
  *     parameters:
@@ -389,11 +436,15 @@ router.get("/computers/:computerName/details", computerController.findComputerDe
  *         required: true
  *         schema:
  *           type: string
- *         example: Intern-user
+ *         example: DEV006
  *         description: The computer name.
  *     responses:
  *       200:
- *         description: Successfully retrieved computer.
+ *         description: Successfully retrieved computer details.
+ *       400:
+ *         description: Missing or invalid computerName.
+ *       404:
+ *         description: Computer not found.
  *       500:
  *         description: Internal server error.
  */
@@ -407,7 +458,7 @@ router.get("/computers/:computerName", computerController.findByComputerName);
  * /programs/{programName}/computers:
  *   get:
  *     summary: Get computers by program name
- *     description: Returns a list of computer names that have the specified program installed.
+ *     description: Returns a list of computer names that have the specified program installed, ordered alphabetically by computer name.
  *     tags:
  *       - Computers
  *     parameters:
@@ -421,6 +472,10 @@ router.get("/computers/:computerName", computerController.findByComputerName);
  *     responses:
  *       200:
  *         description: Successfully retrieved computer names.
+ *       400:
+ *         description: Missing or invalid programName.
+ *       404:
+ *         description: No computers found for this program.
  *       500:
  *         description: Internal server error.
  */

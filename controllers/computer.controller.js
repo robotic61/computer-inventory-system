@@ -6,7 +6,12 @@ async function getAllComputers(req, res) {
             SELECT * FROM Computers
         `);
 
-        res.status(200).json(rows);
+        const cleanRows = rows.map(row => {
+            const {id, ...cleanRow} = row;
+            return cleanRow;
+        });
+
+        res.status(200).json(cleanRows);
         // usually auto set to status 200, but should specific so it is more clear.
 
     } catch (error) {
@@ -20,6 +25,7 @@ async function getAllComputers(req, res) {
 
 async function findByComputerName(req, res) {
     try {
+
         const computerName = req.params.computerName;
 
         if (!computerName || computerName.trim() === "") {
@@ -75,35 +81,37 @@ async function findByComputerName(req, res) {
             */
         }
         
-    const result = await db.query(`
-        SELECT * FROM Computers WHERE 
-        computer_name = ?
-        `, [computerName]);
-    
-    const computer = result[0][0]; // returns a single object
+
+        const [rows] = await db.query(`
+            SELECT * FROM Computers WHERE 
+            computer_name = ?
+            `, [computerName]);
+        
+
+        const row = rows[0];
+
+        // if no computer found
+        if (!row) {
+            return res.status(404).json({
+                message: "Computer not found"
+            });
+        }
+
+        const {id, ...computer} = row;
 
         /*
         If no rows exist:
 
-        result[0] = []
+        rows = []
 
         Then:
 
-        result[0][0]
+        rows[0]
 
         becomes:
 
         undefined
         */
-
-        if (!computer) {
-            //
-            return res.status(404).json({
-                // Status 404 Not Found means: Requested resource does not exist
-                // "I understood your request, but the thing you asked for does not exist."
-                message: "Computer not found"
-            });
-        }
 
         res.status(200).json(computer);
         // add message to all json and status 200.
@@ -116,97 +124,125 @@ async function findByComputerName(req, res) {
     }
 }
 
-// find all tables, except for computers table.
+// find computer details and all related child table data
 async function findComputerDetailsByComputerName(req, res) {
     try {
         const computerName = req.params.computerName;
 
-        const [programs] = await db.query(`
-            SELECT p.program_name
-            FROM Computers c
-            JOIN Programs p 
-                ON c.id = p.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
 
-        const [network_adapters] = await db.query(`
-            SELECT n.name, n.mac_address, n.status, n.ip_address
-            FROM Computers c
-            JOIN network_adapters n
-                ON c.id = n.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
+        if (!computerName || computerName.trim() === "") {
+            return res.status(400).json({ // sends 400 response, and stops function execution
+                // Status 400 (Bad Request) means: The client sent invalid input.
+                message: "computerName is required"
+            });
+        }
 
-        const [rams] = await db.query(`
-            SELECT r.brand, r.part_number, r.capacity, r.speed, r.type, r.form_factor
-            FROM Computers c
-            JOIN Rams r
-                ON r.computer_id = c.id
-            WHERE c.computer_name = ?
+        const [computerRows] = await db.query(`
+            SELECT *
+            FROM Computers
+            WHERE computer_name = ?
             `, [computerName]);
         
-        const [batteries] = await db.query(`
-            SELECT b.battery_name, b.manufacturer, b.chemistry, b.design_capacity, b.full_charge_capacity, b.health_percent, b.status
-            FROM Computers c
-            JOIN Batteries b
-                ON b.computer_id = c.id
-            WHERE c.computer_name = ?
-            `, [computerName]);
+        // if computer not found
+        if (computerRows.length === 0) {
+            return res.status(404).json({
+                message: "Computer not found"
+            });
+        }
 
-        const [storages] = await db.query(`
-            SELECT s.storage_name, s.serial_number, s.storage_type, s.capacity, s.health_status, s.connection_type, s.temperature
-            FROM Computers c
-            JOIN Storages s
-                ON s.computer_id = c.id
-            WHERE c.computer_name = ?
-            `, [computerName]);  
+        /*
+        query can return many rows(one row in this query):
 
-        const [gpus] = await db.query(`
-            SELECT g.gpu_name, g.manufacturer, g.gpu_type, g.vram, g.ram_share, g.driver_version
-            FROM Computers c
-            JOIN Gpus g
-                ON g.computer_id = c.id
-            WHERE c.computer_name = ?
-            `, [computerName]);
+        computerRows = [
+            {
+                id: 9,
+                computer_name: "DEV006",
+                brand: "ASUS",
+                model: "TUF A15"
+            }
+        ]
+        */
 
-        const [cpus] = await db.query(`
-            SELECT cp.cpu_name, cp.manufacturer, cp.cores, cp.threads, cp.base_speed, cp.max_speed, cp.socket_type
-            FROM Computers c
-            JOIN Cpus cp
-                ON cp.computer_id = c.id
-            WHERE c.computer_name = ?
-            `, [computerName]);
+        // get json from the query rows
+        const computer = computerRows[0];
 
-        const [printers] = await db.query(`
-            SELECT p.printer_name, p.ip_address, p.department, p.is_default
-            FROM Computers c
-            JOIN Printers p
-                ON p.computer_id = c.id
-            WHERE c.computer_name = ?
-            `, [computerName]);
+        // object destructuring with rest syntax
+        const {id, ...computerData} = computer;
 
-        const [external_displays] = await db.query(`
-            SELECT e.display_name
-            FROM Computers c
-            JOIN external_displays e
-                ON e.computer_id = c.id
-            WHERE c.computer_name = ?
-            `, [computerName]);   
+        /*
 
-        const results = {
-            programs,
-            network_adapters,
-            rams,
-            batteries,
-            storages,
-            gpus,
-            cpus,
-            printers,
-            external_displays
+        suppose:
+
+        const computer = {
+            id: 5,
+            computer_name: "DEV006",
+            brand: "ASUS",
+            os: "Windows 11"
         };
 
-        res.status(200).json(results);
+        Take id out of computer.
+        Put everything else into computerData.
+        get:
 
+        id = 5
+
+        and:
+
+        computerData = {
+            computer_name: "DEV006",
+            brand: "ASUS",
+            os: "Windows 11"
+        }
+        */
+
+
+
+        // list all childTables
+        const childTables = [
+            "Programs",
+            "network_adapters",
+            "Rams",
+            "Batteries",
+            "Storages",
+            "external_displays",
+            "Gpus",
+            "Cpus",
+            "Printers"
+        ];
+
+        const results = {
+            computer: computerData
+        };
+
+        // For each child table, get all rows that belong to this computer, clean the rows, then store them in results.
+        for (const tableName of childTables) {
+            const [rows] = await db.query(`
+                SELECT *
+                FROM ${tableName}
+                WHERE computer_id = ?
+                `, [id]);
+            
+            // The map method returns a brand new transformed array
+            results[tableName] = rows.map(row => {
+                const {id, computer_id, ...cleanRow} = row;
+                return cleanRow; // transforms each row into cleanRow without id and computer_id
+                // for multiple map statements use return
+            });
+
+        }
+            /*
+            This:
+            results["Rams"]
+
+            is EXACTLY SAME as:
+
+            results.Rams
+
+            saves the result of the transformed row into the results field as the tableName
+            */
+
+
+        res.status(200).json(results);
     } catch (error) {
         res.status(500).json({
             message: "Failed to get computer details",
@@ -240,6 +276,33 @@ async function saveComputer(req, res) {
 
         DELETE FROM table_name WHERE condition;
         */
+
+        // checks if input is valid
+        if (!req.body || !Array.isArray(req.body.tables)) {
+            return res.status(400).json({
+                message: "tables array is required"
+            });
+        }
+
+        if (!req.body.computerName || req.body.computerName.trim() === "") {
+            return res.status(400).json({
+                message: "computerName is required"
+            });
+        }
+
+        const hasComputerTable = req.body.tables.some(table => table.tableName === "Computers");
+        // For each table, check if table.tableName is exactly "Computers".
+        /*
+        .some(...) means:
+
+        Check if at least one item in the array matches this condition. (if one true then it returns true)
+        if all returns false then hasComputerTable = false
+        */
+
+        if (!hasComputerTable) { // !false = true
+            return res.status(400).json({message: "Computers table is required"});
+        }
+
         let comSqlInsert;
         let tableName;
         let insertSqls = [];
@@ -250,9 +313,42 @@ async function saveComputer(req, res) {
         for (const table of req.body.tables) { // iterate through each tables (for each table do this)
             tableName = table.tableName;
 
+            if (!Array.isArray(table.rows)) {
+                return res.status(400).json({
+                    message: `${table.tableName} rows must be an array`
+                });
+            }
+            
             for (const row of table.rows) { // iterate through each rows (for each row do this)
                 // need to do one INSERT operation for each row
                 // RESETS index for each row(after finishing constructing for each operation)
+
+                if (!Array.isArray(row.fields) || row.fields.length === 0) {
+                    return res.status(400).json({
+                        message: `${tableName} fields must be a non-empty array`
+                    });
+                }
+
+                /*
+                Valid
+
+                {
+                "tableName": "external_displays",
+                "rows": []
+                }
+
+                Invalid
+
+                {
+                "tableName": "external_displays",
+                "rows": [
+                    {
+                    "fields": []
+                    }
+                ]
+                }
+                */
+
                 let index = 0; // where we are at in the fields array
                 let insertSql = `INSERT INTO ${tableName} (`
                 
@@ -264,6 +360,11 @@ async function saveComputer(req, res) {
 
                 for (const field of row.fields) { // iterate through each fields
 
+                    if (!field.name || field.name.trim() === "") {
+                        return res.status(400).json({
+                            message: `${tableName} field name is required`
+                        });
+                    }
                     if (index === row.fields.length-1) { // for last item add ')' and no space and WHERE condition for UPDATE
                         if (tableName !== 'Computers') {
                             insertSqlsValues.push(field.value);
@@ -350,7 +451,7 @@ async function saveComputer(req, res) {
         }
         }
 
-        // no computer id found
+        // if computer exists, delete old computer row first
         if (row !== undefined) { // if there is existing computer
 
             await db.query(`DELETE FROM Computers
@@ -384,8 +485,9 @@ async function saveComputer(req, res) {
 
         // }
         res.status(201).json({
-        message: "Computer saved successfully"
+            message: "Computer saved successfully"
         });
+
     } catch(error) {
 
        return res.status(500).json({
@@ -399,77 +501,35 @@ async function saveComputer(req, res) {
 async function deleteComputer(req, res) {
     try {
         const computerName = req.params.computerName;
-
-        await db.query(`
-            DELETE n 
-            FROM network_adapters n
-            JOIN Computers c ON c.id = n.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-
-        await db.query(`
-            DELETE p 
-            FROM Programs p
-            JOIN Computers c ON c.id = p.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-            /* Delete table with FK first before PK because PK relates to FK */
-
-        await db.query(`
-            DELETE e
-            FROM external_displays e
-            JOIN Computers c ON c.id = e.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-
-        await db.query(`
-            DELETE cp
-            FROM Cpus cp
-            JOIN Computers c ON c.id = cp.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-
-        await db.query(`
-            DELETE b
-            FROM Batteries b
-            JOIN Computers c ON c.id = b.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-
-        await db.query(`
-            DELETE r
-            FROM Rams r
-            JOIN Computers c ON c.id = r.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-
-        await db.query(`
-            DELETE s
-            FROM Storages s
-            JOIN Computers c ON c.id = s.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-
-        await db.query(`
-            DELETE p
-            FROM Printers p
-            JOIN Computers c ON c.id = p.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
-
-        await db.query(`
-            DELETE g
-            FROM Gpus g
-            JOIN Computers c ON c.id = g.computer_id
-            WHERE c.computer_name = ?
-            `, [computerName]);
         
-        await db.query(`
+        if (!computerName || computerName.trim() === "") {
+            return res.status(400).json({
+                message: "computerName is required"
+            });
+        }
+
+        const [result] = await db.query(`
             DELETE 
             FROM Computers
             WHERE computer_name = ?
             `, [computerName]);
         // Delete child tables rows before parent tables rows
+        // But here we have ON DELETE CASCADE for the child tables, so we can delete immediately.
+
+        /*
+        result is NOT an array of rows, it is an object like:
+        {
+            affectedRows: 1,
+            warningStatus: 0,
+            ...
+        }
+        */
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                message: "Computer not found"
+            });
+        }
 
         res.status(200).json({
             message: "Computer deleted successfully"
@@ -490,11 +550,30 @@ async function deleteProgramByComputerName(req, res) {
             program
         } = req.body;
 
-        await db.query(`
+        // if there is no computer_name/program in the JSON field it will become undefined
+        if (!computer_name || computer_name.trim() === "") {
+            return res.status(400).json({
+                message: "computer_name is required"
+            });
+        }
+
+        if (!program || program.trim() === "") {
+            return res.status(400).json({
+                message: "program is required"
+            });
+        }
+
+        const [result] = await db.query(`
             DELETE p FROM Programs p
-            INNER JOIN Computers c ON c.id = p.computer_id
+            JOIN Computers c ON c.id = p.computer_id
             WHERE c.computer_name = ? AND p.program_name = ?
             `, [computer_name, program]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                message: "No matching program found for this computer"
+            });
+        }
 
         res.status(200).json({
             message: "Program deleted successfully"
@@ -515,15 +594,35 @@ async function insertOneProgram(req, res) {
             program
         } = req.body;
 
+        if (!computer_name || computer_name.trim() === "") {
+            return res.status(400).json({
+                message: "computer_name is required"
+            });
+        }
+
+        if (!program || program.trim() === "") {
+            return res.status(400).json({
+                message: "program is required"
+            });
+        }
+
         const [rows] = await db.query(`
             SELECT id FROM Computers
             WHERE computer_name = ?
             `, [computer_name]);
 
-        const row = rows[0]; /* gets the first array from the result
-        , which is the array of rows object */
+        const row = rows[0]; // gets the first object in the row array
+        
+        // if no first object = row = undefined = no computer found
+        if (!row) {
+
+            return res.status(404).json({
+                message: "Computer not found"
+            });
+        }
 
         const computer_id = row.id;
+
 
         const [result] = await db.query(`
             INSERT INTO Programs (computer_id,
@@ -546,6 +645,12 @@ async function findComputersByProgramName(req, res) {
     try {
         const programName = req.params.programName;
 
+        if (!programName || programName.trim() === "") {
+            return res.status(400).json({
+                message: "program is required"
+            });
+        }
+
         const [computers] = await db.query(`
             SELECT c.computer_name
             FROM Computers c
@@ -554,6 +659,12 @@ async function findComputersByProgramName(req, res) {
             WHERE p.program_name = ?
             ORDER BY c.computer_name ASC
             `, [programName]);
+
+        if (computers.length === 0) {
+            return res.status(404).json({
+                message: "No computers found for this program"
+            })
+        }
 
         res.status(200).json(computers);
     } catch(error) {
